@@ -7,36 +7,78 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('smart_health_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.error('Failed to parse stored user', e);
+    const checkAuth = async () => {
+      const token = localStorage.getItem('smart_health_token');
+      if (token) {
+        try {
+          const response = await fetch('/api/me', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setUser(data.user);
+          } else {
+            localStorage.removeItem('smart_health_token');
+          }
+        } catch (e) {
+          console.error('Failed to verify token', e);
+          localStorage.removeItem('smart_health_token');
+        }
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+    checkAuth();
   }, []);
 
-  const login = (email, password) => {
-    // Mock login
-    const mockUser = { id: '1', name: email.split('@')[0], email };
-    setUser(mockUser);
-    localStorage.setItem('smart_health_user', JSON.stringify(mockUser));
-    return true;
+  const login = async (email, password) => {
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Login failed');
+        }
+
+        setUser(data.user);
+        localStorage.setItem('smart_health_token', data.token);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
   };
 
-  const register = (name, email, password) => {
-    // Mock register
-    const mockUser = { id: '1', name, email };
-    setUser(mockUser);
-    localStorage.setItem('smart_health_user', JSON.stringify(mockUser));
-    return true;
+  const register = async (name, email, password) => {
+    try {
+        const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Registration failed');
+        }
+
+        setUser(data.user);
+        localStorage.setItem('smart_health_token', data.token);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('smart_health_user');
+    localStorage.removeItem('smart_health_token');
   };
 
   if (loading) return null;

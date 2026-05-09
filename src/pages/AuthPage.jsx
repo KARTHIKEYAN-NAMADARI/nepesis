@@ -19,7 +19,7 @@ const AuthPage = () => {
     }
   }, [user, navigate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -33,10 +33,15 @@ const AuthPage = () => {
       return;
     }
 
+    let result;
     if (isLogin) {
-      login(email, password);
+      result = await login(email, password);
     } else {
-      register(name, email, password);
+      result = await register(name, email, password);
+    }
+
+    if (!result.success) {
+        setError(result.error);
     }
   };
 

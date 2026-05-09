@@ -1,12 +1,35 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import FoodRecognition from '../components/FoodRecognition';
 import './FoodAIPage.css';
 
 const FoodAIPage = () => {
   const [meals, setMeals] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMeals = async () => {
+        try {
+            const token = localStorage.getItem('smart_health_token');
+            const response = await fetch('/api/meals', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setMeals(data.meals.map(m => ({ ...m, time: new Date(m.time) })));
+            }
+        } catch (error) {
+            console.error('Failed to fetch meals', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchMeals();
+  }, []);
 
   const handleLogMeal = (meal) => {
-    setMeals(prev => [meal, ...prev]);
+    // Add the meal, ensuring time is a Date object
+    const newMeal = { ...meal, time: new Date(meal.time) };
+    setMeals(prev => [newMeal, ...prev]);
   };
 
   const dailyTotals = useMemo(() => {
@@ -17,6 +40,8 @@ const FoodAIPage = () => {
       fat: acc.fat + meal.fat
     }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
   }, [meals]);
+
+  if (loading) return <div>Loading...</div>;
 
   return (
     <div className="food-ai-page">

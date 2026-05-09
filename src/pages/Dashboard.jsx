@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo } from 'react';
+import React, { useState, useContext, useMemo, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import SmartwatchSync from '../components/SmartwatchSync';
 import './Dashboard.css';
@@ -6,15 +6,32 @@ import './Dashboard.css';
 const Dashboard = () => {
   const { user } = useContext(AuthContext);
 
-  // Mock initial state
-  const [workouts, setWorkouts] = useState([
-    { id: '1', type: 'Running', duration: 30, calories: 350, time: new Date(Date.now() - 86400000) }
-  ]);
-  const [hydrationLogs, setHydrationLogs] = useState([
-    { id: 'h1', amount: 500, time: new Date(Date.now() - 3600000) }
-  ]);
+  const [workouts, setWorkouts] = useState([]);
+  const [hydrationLogs, setHydrationLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Base metrics (would come from API/Context in real app)
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+        try {
+            const token = localStorage.getItem('smart_health_token');
+            const response = await fetch('/api/dashboard', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setWorkouts(data.workouts.map(w => ({ ...w, time: new Date(w.time) })));
+                setHydrationLogs(data.hydrationLogs.map(h => ({ ...h, time: new Date(h.time) })));
+            }
+        } catch (error) {
+            console.error('Failed to fetch dashboard data', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchDashboardData();
+  }, []);
+
+  // Base metrics
   const caloriesConsumed = 1850;
   const consistencyScore = 85; // %
   const dailyHydrationGoal = 2500; // ml
@@ -41,27 +58,18 @@ const Dashboard = () => {
 
   const energyBalance = caloriesConsumed - totalCaloriesBurned;
 
-  // Basic health score calculation (1-100)
   const healthScore = useMemo(() => {
-    let score = 50; // Base score
-
-    // Activity factor (up to 20 pts)
+    let score = 50;
     score += Math.min(20, (totalActiveMinutes / 60) * 20);
-
-    // Caloric balance factor (up to 15 pts)
-    // Ideal is mild deficit (-500 to 0)
     if (energyBalance < 0 && energyBalance > -800) score += 15;
     else if (energyBalance >= 0 && energyBalance < 300) score += 10;
     else score += 5;
-
-    // Consistency factor (up to 10 pts)
     score += (consistencyScore / 100) * 10;
-
-    // Hydration factor (up to 5 pts)
     score += (hydrationPercentage / 100) * 5;
-
     return Math.min(100, Math.round(score));
   }, [totalActiveMinutes, energyBalance, consistencyScore, hydrationPercentage]);
+
+  if (loading) return <div>Loading...</div>;
 
   return (
     <div className="dashboard">

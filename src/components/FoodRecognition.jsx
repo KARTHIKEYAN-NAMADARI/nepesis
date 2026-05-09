@@ -1,16 +1,9 @@
 import React, { useState, useRef } from 'react';
 import './FoodRecognition.css';
 
-const MOCK_FOOD_CATALOG = [
-  { name: 'Grilled Chicken Salad', calories: 350, protein: 35, carbs: 12, fat: 18 },
-  { name: 'Avocado Toast with Egg', calories: 420, protein: 18, carbs: 35, fat: 24 },
-  { name: 'Salmon Quinoa Bowl', calories: 550, protein: 42, carbs: 45, fat: 22 },
-  { name: 'Berry Smoothie Bowl', calories: 320, protein: 10, carbs: 55, fat: 8 },
-  { name: 'Oatmeal with Nuts', calories: 380, protein: 12, carbs: 50, fat: 15 }
-];
-
 const FoodRecognition = ({ onLogMeal }) => {
   const [image, setImage] = useState(null);
+  const [fileToUpload, setFileToUpload] = useState(null);
   const [status, setStatus] = useState('idle'); // idle, analyzing, detected, failed, logging
   const [result, setResult] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -20,32 +13,44 @@ const FoodRecognition = ({ onLogMeal }) => {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
+      setFileToUpload(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImage(reader.result);
-        analyzeImage();
+        analyzeImage(file);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const analyzeImage = () => {
+  const analyzeImage = async (file) => {
     setStatus('analyzing');
     setResult(null);
     setIsEditing(false);
 
-    // Simulate AI processing delay
-    setTimeout(() => {
-      const randomFood = MOCK_FOOD_CATALOG[Math.floor(Math.random() * MOCK_FOOD_CATALOG.length)];
-      const mockResult = {
-        ...randomFood,
-        confidence: Math.floor(Math.random() * 15) + 85 // 85-99%
-      };
+    const formData = new FormData();
+    formData.append('image', file);
 
-      setResult(mockResult);
-      setEditForm(mockResult);
-      setStatus('detected');
-    }, 2000);
+    try {
+        const token = localStorage.getItem('smart_health_token');
+        const response = await fetch('/api/analyze-food', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+
+        if (!response.ok) throw new Error('Analysis failed');
+
+        const data = await response.json();
+        setResult(data);
+        setEditForm(data);
+        setStatus('detected');
+    } catch (error) {
+        console.error('Error analyzing image:', error);
+        setStatus('failed');
+    }
   };
 
   const handleEditChange = (e) => {
@@ -56,22 +61,35 @@ const FoodRecognition = ({ onLogMeal }) => {
     }));
   };
 
-  const handleSaveAndLog = () => {
+  const handleSaveAndLog = async () => {
     setStatus('logging');
-    setTimeout(() => {
-      const finalMeal = {
-        id: Date.now().toString(),
-        time: new Date(),
-        ...editForm
-      };
-      if (onLogMeal) {
-        onLogMeal(finalMeal);
-      }
-      // Reset after logging
-      setImage(null);
-      setResult(null);
-      setStatus('idle');
-    }, 800);
+    try {
+        const token = localStorage.getItem('smart_health_token');
+        const finalMeal = { ...editForm };
+
+        const response = await fetch('/api/meals', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(finalMeal)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (onLogMeal) {
+                onLogMeal(data.meal);
+            }
+            setImage(null);
+            setFileToUpload(null);
+            setResult(null);
+            setStatus('idle');
+        }
+    } catch (error) {
+        console.error('Failed to log meal:', error);
+        setStatus('detected'); // revert status on error
+    }
   };
 
   return (
@@ -112,6 +130,13 @@ const FoodRecognition = ({ onLogMeal }) => {
           <div className="loading-state">
             <div className="spinner"></div>
             <p>AI is analyzing your meal...</p>
+          </div>
+        )}
+
+        {status === 'failed' && (
+          <div className="error-message">
+             <p>Analysis failed. Please try again.</p>
+             <button onClick={() => setStatus('idle')} className="cancel-btn">Back</button>
           </div>
         )}
 
