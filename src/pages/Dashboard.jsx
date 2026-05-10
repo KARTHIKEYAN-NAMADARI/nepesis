@@ -8,6 +8,7 @@ const Dashboard = () => {
 
   const [workouts, setWorkouts] = useState([]);
   const [hydrationLogs, setHydrationLogs] = useState([]);
+  const [meals, setMeals] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ const Dashboard = () => {
                 const data = await response.json();
                 setWorkouts(data.workouts.map(w => ({ ...w, time: new Date(w.time) })));
                 setHydrationLogs(data.hydrationLogs.map(h => ({ ...h, time: new Date(h.time) })));
+                setMeals(data.meals.map(m => ({ ...m, time: new Date(m.time) })));
             }
         } catch (error) {
             console.error('Failed to fetch dashboard data', error);
@@ -32,8 +34,7 @@ const Dashboard = () => {
   }, []);
 
   // Base metrics
-  const caloriesConsumed = 1850;
-  const consistencyScore = 85; // %
+  const consistencyScore = workouts.length > 0 ? 85 : 0; // % - 0 if no workouts
   const dailyHydrationGoal = 2500; // ml
 
   const handleSync = (newWorkout, newHydration) => {
@@ -42,6 +43,10 @@ const Dashboard = () => {
   };
 
   // Calculations
+  const caloriesConsumed = useMemo(() => {
+      return meals.reduce((sum, meal) => sum + meal.calories, 0);
+  }, [meals]);
+
   const totalCaloriesBurned = useMemo(() => {
     return workouts.reduce((sum, workout) => sum + workout.calories, 0);
   }, [workouts]);
@@ -59,6 +64,10 @@ const Dashboard = () => {
   const energyBalance = caloriesConsumed - totalCaloriesBurned;
 
   const healthScore = useMemo(() => {
+    if (workouts.length === 0 && hydrationLogs.length === 0 && meals.length === 0) {
+        return 0; // Completely new account
+    }
+
     let score = 50;
     score += Math.min(20, (totalActiveMinutes / 60) * 20);
     if (energyBalance < 0 && energyBalance > -800) score += 15;
@@ -67,7 +76,7 @@ const Dashboard = () => {
     score += (consistencyScore / 100) * 10;
     score += (hydrationPercentage / 100) * 5;
     return Math.min(100, Math.round(score));
-  }, [totalActiveMinutes, energyBalance, consistencyScore, hydrationPercentage]);
+  }, [totalActiveMinutes, energyBalance, consistencyScore, hydrationPercentage, workouts.length, hydrationLogs.length, meals.length]);
 
   if (loading) return <div>Loading...</div>;
 
@@ -76,7 +85,7 @@ const Dashboard = () => {
       <header className="dashboard-header">
         <h2>Welcome back, {user?.name}!</h2>
         <div className="live-summary">
-          Your health score is {healthScore}. Keep up the good work!
+          Your health score is {healthScore}. {healthScore === 0 ? "Let's get started by syncing a device or logging a meal!" : "Keep up the good work!"}
         </div>
       </header>
 
@@ -93,8 +102,8 @@ const Dashboard = () => {
             <div className="metric-card">
               <h3>Energy Balance</h3>
               <div className="metric-value">{energyBalance > 0 ? '+' : ''}{energyBalance} kcal</div>
-              <p className={`status-text ${energyBalance <= 0 ? 'positive' : 'warning'}`}>
-                {energyBalance <= 0 ? 'Caloric Deficit' : 'Caloric Surplus'}
+              <p className={`status-text ${energyBalance <= 0 && (workouts.length > 0 || meals.length > 0) ? 'positive' : 'warning'}`}>
+                {energyBalance === 0 ? 'Balanced' : energyBalance < 0 ? 'Caloric Deficit' : 'Caloric Surplus'}
               </p>
             </div>
 

@@ -112,8 +112,9 @@ app.get('/api/dashboard', authenticateToken, (req, res) => {
   const userId = req.user.id;
   const workouts = db.workouts[userId] || [];
   const hydrationLogs = db.hydration[userId] || [];
+  const meals = db.meals[userId] || [];
 
-  res.json({ workouts, hydrationLogs });
+  res.json({ workouts, hydrationLogs, meals });
 });
 
 app.post('/api/sync', authenticateToken, (req, res) => {
